@@ -1,10 +1,12 @@
 import { db } from "@/lib/db";
 import { Card, CardHeader, CardTitle, CardBody, StatusBadge, EmptyState } from "@/components/ui/primitives";
 import { NewReferralForm } from "@/components/dashboard/NewReferralForm";
+import { CommunicationDraftForm } from "@/components/dashboard/CommunicationDraftForm";
 
 export default async function PatientOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [journey, recentEvents, openObligations] = await Promise.all([
+  const [patient, journey, recentEvents, openObligations] = await Promise.all([
+    db.patient.findUniqueOrThrow({ where: { id } }),
     db.careJourney.findFirst({ where: { patientId: id }, orderBy: { createdAt: "desc" } }),
     db.careEvent.findMany({ where: { patientId: id }, orderBy: { occurredAt: "desc" }, take: 5 }),
     db.careObligation.findMany({
@@ -81,6 +83,15 @@ export default async function PatientOverviewPage({ params }: { params: Promise<
             </CardBody>
           </Card>
         )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Communication Agent</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <CommunicationDraftForm patientId={id} patientName={patient.name} />
+          </CardBody>
+        </Card>
       </div>
     </div>
   );
