@@ -160,6 +160,7 @@ export async function decideRecommendation(
 
   if (decision === "APPROVED" || decision === "EDITED") {
     await executeRecommendation(decided, actor);
+    return db.aIRecommendation.findUniqueOrThrow({ where: { id: recommendationId } });
   }
 
   return decided;

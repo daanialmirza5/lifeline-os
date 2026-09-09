@@ -19,7 +19,7 @@ export function RiskRefreshButton({ patientId }: { patientId: string }) {
         })
       }
     >
-      {pending ? "Recomputing..." : "Recompute risk"}
+      {pending ? "Recomputing..." : "Recompute risk & recommendations"}
     </Button>
   );
 }
