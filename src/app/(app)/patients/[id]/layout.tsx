@@ -10,6 +10,7 @@ const TABS = [
   { href: "/journey", label: "Care Journey" },
   { href: "/obligations", label: "Obligations" },
   { href: "/risk", label: "Risk" },
+  { href: "/replay", label: "Replay" },
 ];
 
 export default async function PatientLayout({
