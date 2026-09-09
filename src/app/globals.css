@@ -1,26 +1,98 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f8fa;
+  --surface: #ffffff;
+  --foreground: #16202b;
+  --muted: #5b6b7c;
+  --border: #e2e6eb;
+  --primary: #1c4e80;
+  --primary-foreground: #ffffff;
+  --accent: #0f7d8f;
+
+  /* Status palette (validated: colorblind-safe, fixed — never themed
+     per-brand). LOW=good, MODERATE=warning, HIGH=serious, CRITICAL=critical. */
+  --risk-low: #0ca30c;
+  --risk-low-bg: #e3f6e3;
+  --risk-moderate: #ab7900;
+  --risk-moderate-bg: #fdf0d4;
+  --risk-high: #c2532c;
+  --risk-high-bg: #fbe9e1;
+  --risk-critical: #d03b3b;
+  --risk-critical-bg: #fbe3e3;
+
+  /* Raw status hexes for chart fills (kept separate from the badge
+     text/bg pair above, which uses adjusted shades for text contrast). */
+  --chart-good: #0ca30c;
+  --chart-warning: #fab219;
+  --chart-serious: #ec835a;
+  --chart-critical: #d03b3b;
+  --chart-surface: #fcfcfb;
+  --chart-ink: #0b0b0b;
+  --chart-ink-secondary: #52514e;
+  --chart-gridline: #e1e0d9;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0d1117;
+    --surface: #151b23;
+    --foreground: #e6edf3;
+    --muted: #8b98a5;
+    --border: #2a333d;
+    --primary: #6ea8dd;
+    --primary-foreground: #0d1117;
+    --accent: #4fc3d9;
+
+    --risk-low: #4fbf85;
+    --risk-low-bg: #123324;
+    --risk-moderate: #e3b341;
+    --risk-moderate-bg: #362a10;
+    --risk-high: #f0883e;
+    --risk-high-bg: #3a2412;
+    --risk-critical: #f47066;
+    --risk-critical-bg: #3a1613;
+
+    --chart-good: #0ca30c;
+    --chart-warning: #fab219;
+    --chart-serious: #ec835a;
+    --chart-critical: #d03b3b;
+    --chart-surface: #1a1a19;
+    --chart-ink: #ffffff;
+    --chart-ink-secondary: #c3c2b7;
+    --chart-gridline: #2c2c2a;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+* {
+  border-color: var(--border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -48,7 +48,7 @@ async function main() {
   console.log("Seeding Lifeline OS demo data...");
 
   // ── Users ────────────────────────────────────────────────────────────
-  const [admin, clinician, coordinator, patientUser] = await Promise.all([
+  const [, clinician, coordinator, patientUser] = await Promise.all([
     db.user.upsert({
       where: { email: "admin@lifeline.demo" },
       update: {},
@@ -278,6 +278,13 @@ async function main() {
       { type: "LAB_ORDER", status: "COMPLETED", title: "Diagnostic test ordered", occurredDaysAgo: 13 },
       { type: "LAB_RESULT", status: "COMPLETED", title: "Result received: elevated markers", occurredDaysAgo: 11 },
       { type: "CARE_PLAN", status: "COMPLETED", title: "Care plan created", occurredDaysAgo: 10 },
+      {
+        type: "REFERRAL",
+        status: "REQUIRES_APPROVAL",
+        title: "Referral to Cardiology",
+        description: "Referral remains unscheduled.",
+        occurredDaysAgo: 9,
+      },
     ],
     obligations: [
       {

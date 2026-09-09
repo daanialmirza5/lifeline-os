@@ -30,7 +30,7 @@ setInterval(() => {
   }
 }, WINDOW_MS).unref?.();
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const requestId = crypto.randomUUID();
 
   if (request.nextUrl.pathname.startsWith("/api/")) {
