@@ -1,0 +1,316 @@
+// Lifeline OS domain schema.
+//
+// Enums are intentionally modeled as plain `String` columns instead of
+// Prisma's native `enum` type. SQLite (used for zero-setup local dev/test)
+// does not support native enums, while Postgres (recommended for
+// production - see docker-compose.yml) does. Keeping the schema portable
+// across both means swapping `provider`/`DATABASE_URL` is the only change
+// needed to move from local dev to a real deployment. Allowed values for
+// every string-enum field are defined and validated in
+// src/domain/types.ts and src/domain/schemas.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 moved the connection URL used by the CLI (migrate/generate) to
+// prisma.config.ts. The runtime PrismaClient gets its connection through a
+// driver adapter instead (see src/lib/db.ts). The `provider` below still
+// determines which SQL dialect the generated client speaks, so switching
+// databases (e.g. to Postgres for production) means changing this value,
+// the adapter package, and prisma.config.ts together — see docs/architecture.md.
+datasource db {
+  provider = "sqlite"
+}
+
+// ── Identity & Access ────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         String // PATIENT | CLINICIAN | COORDINATOR | ADMIN
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  patient               Patient?               @relation("UserPatient")
+  createdEvents         CareEvent[]             @relation("EventCreatedBy")
+  assignedObligations    CareObligation[]       @relation("ObligationAssignee")
+  assignedTasks         Task[]                  @relation("TaskAssignee")
+  referralsCreated       Referral[]             @relation("ReferralCreatedBy")
+  documentsUploaded      Document[]             @relation("DocumentUploadedBy")
+  recommendationDecisions AIRecommendation[]    @relation("RecommendationDecidedBy")
+  auditEvents            AuditEvent[]           @relation("AuditActor")
+  notifications           Notification[]
+  syncOperations          SyncOperation[]
+}
+
+// ── Core Domain ───────────────────────────────────────────────────────────
+
+model Patient {
+  id        String   @id @default(cuid())
+  mrn       String   @unique // synthetic medical record number
+  name      String
+  dob       DateTime
+  userId    String?  @unique
+  user      User?    @relation("UserPatient", fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  journeys        CareJourney[]
+  events          CareEvent[]
+  obligations     CareObligation[]
+  referrals       Referral[]
+  appointments    Appointment[]
+  tasks           Task[]
+  documents       Document[]
+  riskAssessments RiskAssessment[]
+  recommendations AIRecommendation[]
+}
+
+model CareJourney {
+  id        String   @id @default(cuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id])
+  title     String
+  state     String // CREATED | ACTIVE | ACTION_REQUIRED | IN_PROGRESS | BLOCKED | ESCALATED | COMPLETED | CANCELLED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events          CareEvent[]
+  obligations     CareObligation[]
+  referrals       Referral[]
+  appointments    Appointment[]
+  tasks           Task[]
+  documents       Document[]
+  riskAssessments RiskAssessment[]
+  recommendations AIRecommendation[]
+
+  @@index([patientId])
+}
+
+// FACT: something that happened in the patient's journey.
+model CareEvent {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  journeyId   String
+  journey     CareJourney @relation(fields: [journeyId], references: [id])
+  type        String // CONSULTATION | LAB_ORDER | LAB_RESULT | CARE_PLAN | REFERRAL | APPOINTMENT | MEDICATION | FOLLOW_UP | DOCUMENT | TASK | AI_EVENT
+  status      String // COMPLETED | ACTIVE | PENDING | OVERDUE | BLOCKED | CANCELLED | FAILED | REQUIRES_APPROVAL
+  title       String
+  description String?
+  occurredAt  DateTime
+  createdAt   DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation("EventCreatedBy", fields: [createdById], references: [id])
+  metadata    String? // JSON-encoded
+
+  obligations     CareObligation[]
+  auditEvents     AuditEvent[]
+
+  @@index([patientId])
+  @@index([journeyId])
+}
+
+// OBLIGATION: an explicit, trackable "something must happen" derived from an event.
+model CareObligation {
+  id            String    @id @default(cuid())
+  patientId     String
+  patient       Patient   @relation(fields: [patientId], references: [id])
+  journeyId     String
+  journey       CareJourney @relation(fields: [journeyId], references: [id])
+  sourceEventId String
+  sourceEvent   CareEvent @relation(fields: [sourceEventId], references: [id])
+  type          String
+  description   String
+  priority      String // LOW | MEDIUM | HIGH | CRITICAL
+  createdAt     DateTime  @default(now())
+  dueAt         DateTime
+  status        String // OPEN | IN_PROGRESS | COMPLETED | OVERDUE | CANCELLED | ESCALATED
+  assignedToId  String?
+  assignedTo    User?     @relation("ObligationAssignee", fields: [assignedToId], references: [id])
+  completedAt   DateTime?
+  evidence      String?
+
+  tasks           Task[]
+  recommendations AIRecommendation[]
+
+  @@index([patientId])
+  @@index([journeyId])
+  @@index([status])
+}
+
+model Referral {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  journeyId    String
+  journey      CareJourney @relation(fields: [journeyId], references: [id])
+  specialty    String
+  status       String // PENDING | SCHEDULED | COMPLETED | CANCELLED
+  createdById  String?
+  createdBy    User?    @relation("ReferralCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+  notes        String?
+
+  appointments Appointment[]
+
+  @@index([patientId])
+}
+
+model Appointment {
+  id          String    @id @default(cuid())
+  patientId   String
+  patient     Patient   @relation(fields: [patientId], references: [id])
+  journeyId   String
+  journey     CareJourney @relation(fields: [journeyId], references: [id])
+  referralId  String?
+  referral    Referral? @relation(fields: [referralId], references: [id])
+  type        String
+  provider    String
+  scheduledAt DateTime
+  status      String // SCHEDULED | COMPLETED | MISSED | CANCELLED
+  createdAt   DateTime  @default(now())
+
+  @@index([patientId])
+}
+
+model Task {
+  id            String    @id @default(cuid())
+  patientId     String
+  patient       Patient   @relation(fields: [patientId], references: [id])
+  journeyId     String
+  journey       CareJourney @relation(fields: [journeyId], references: [id])
+  obligationId  String?
+  obligation    CareObligation? @relation(fields: [obligationId], references: [id])
+  title         String
+  description   String?
+  assignedToId  String?
+  assignedTo    User?     @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedRole  String?
+  priority      String // LOW | MEDIUM | HIGH | CRITICAL
+  status        String // OPEN | IN_PROGRESS | COMPLETED | CANCELLED
+  dueAt         DateTime?
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+  version       Int       @default(1) // optimistic concurrency for offline sync conflicts
+
+  @@index([patientId])
+  @@index([status])
+}
+
+model Document {
+  id              String   @id @default(cuid())
+  patientId       String
+  patient         Patient  @relation(fields: [patientId], references: [id])
+  journeyId       String?
+  journey         CareJourney? @relation(fields: [journeyId], references: [id])
+  filename        String
+  docType         String? // detected document type
+  uploadedById    String?
+  uploadedBy      User?    @relation("DocumentUploadedBy", fields: [uploadedById], references: [id])
+  uploadedAt      DateTime @default(now())
+  status          String // UPLOADED | EXTRACTED | VALIDATED | REJECTED
+  rawTextSanitized String? // untrusted text, sanitized before any AI reasoning
+  extractedFields String? // JSON-encoded structured extraction, pending human validation
+
+  @@index([patientId])
+}
+
+// INTERPRETATION: deterministic risk engine output.
+model RiskAssessment {
+  id         String   @id @default(cuid())
+  patientId  String
+  patient    Patient  @relation(fields: [patientId], references: [id])
+  journeyId  String
+  journey    CareJourney @relation(fields: [journeyId], references: [id])
+  riskScore  Int
+  riskLevel  String // LOW | MODERATE | HIGH | CRITICAL
+  factors    String // JSON-encoded array of { factor, weight }
+  computedAt DateTime @default(now())
+
+  @@index([patientId])
+  @@index([journeyId])
+}
+
+// RECOMMENDATION + DECISION: AI-suggested action and its human approval outcome.
+model AIRecommendation {
+  id             String    @id @default(cuid())
+  patientId      String
+  patient        Patient   @relation(fields: [patientId], references: [id])
+  journeyId      String?
+  journey        CareJourney? @relation(fields: [journeyId], references: [id])
+  obligationId   String?
+  obligation     CareObligation? @relation(fields: [obligationId], references: [id])
+  agentType      String // CONTINUITY | RISK_EXPLANATION | COORDINATION | COMMUNICATION | CLINICAL_SUMMARY | TIMELINE
+  recommendation String
+  reasoning      String
+  evidence       String // JSON-encoded array of evidence strings
+  confidence     Float
+  status         String // SUGGESTED | APPROVED | REJECTED | EDITED | EXECUTED
+  createdAt      DateTime  @default(now())
+  decidedById    String?
+  decidedBy      User?     @relation("RecommendationDecidedBy", fields: [decidedById], references: [id])
+  decidedAt      DateTime?
+  decisionNotes  String?
+  provider       String? // which AI provider produced this (mock/anthropic/openai/google)
+  model          String?
+
+  @@index([patientId])
+  @@index([status])
+}
+
+// ── Governance ───────────────────────────────────────────────────────────
+
+model AuditEvent {
+  id            String   @id @default(cuid())
+  actorId       String?
+  actor         User?    @relation("AuditActor", fields: [actorId], references: [id])
+  actorRole     String?
+  action        String
+  entityType    String
+  entityId      String
+  previousState String?
+  newState      String?
+  reason        String?
+  requestId     String
+  createdAt     DateTime @default(now())
+
+  careEventId String?
+  careEvent   CareEvent? @relation(fields: [careEventId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model SyncOperation {
+  id            String    @id @default(cuid())
+  operationId   String    @unique // client-generated idempotency key
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id])
+  entityType    String
+  entityId      String
+  operationType String
+  payload       String // JSON-encoded
+  createdAt     DateTime  @default(now())
+  appliedAt     DateTime?
+  syncStatus    String // PENDING | APPLIED | CONFLICT | REJECTED
+  conflictDetails String? // JSON-encoded { local, server }
+
+  @@index([entityType, entityId])
+}
+
+model Notification {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  title             String
+  body              String
+  type              String
+  read              Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  relatedEntityType String?
+  relatedEntityId   String?
+
+  @@index([userId])
+}
