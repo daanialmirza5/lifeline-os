@@ -10,6 +10,7 @@ import { transitionJourney } from "@/lib/services/journeys";
 import { createReferral, scheduleAppointment } from "@/lib/services/referrals";
 import { uploadDocument, validateDocument, rejectDocument } from "@/lib/services/documents";
 import { generateCommunicationDraft } from "@/lib/services/recommendations";
+import { resolveConflict } from "@/lib/services/sync";
 import { JourneyState, TaskStatus } from "@/domain/types";
 
 export interface ActionState {
@@ -132,6 +133,15 @@ export async function rejectDocumentAction(documentId: string, reason: string) {
   const session = await requireRole(["CLINICIAN", "COORDINATOR", "ADMIN"]);
   await rejectDocument(documentId, reason, session);
   revalidatePath("/documents");
+}
+
+export async function resolveConflictAction(
+  operationId: string,
+  resolution: "KEEP_SERVER" | "APPLY_LOCAL"
+) {
+  const session = await requireSession();
+  await resolveConflict(operationId, resolution, session);
+  revalidatePath("/tasks");
 }
 
 export async function generateCommunicationDraftAction(

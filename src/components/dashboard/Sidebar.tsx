@@ -5,6 +5,7 @@ import { Session } from "@/lib/auth";
 const NAV = [
   { href: "/", label: "Dashboard" },
   { href: "/patients", label: "Patients" },
+  { href: "/tasks", label: "Tasks" },
   { href: "/recommendations", label: "AI Recommendations" },
   { href: "/approvals", label: "Approval Queue" },
   { href: "/referrals", label: "Referrals" },
