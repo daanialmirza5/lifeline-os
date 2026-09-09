@@ -1,0 +1,43 @@
+# Production-reference compose file. NOT exercised in this build's
+# environment (Docker Desktop's daemon was not running here — see
+# docs/architecture.md). Provided as the documented path to a Postgres
+# deployment; switching the app itself from SQLite to Postgres requires
+# the additional steps noted in prisma/schema.prisma and docs/architecture.md
+# (a different driver adapter, `provider = "postgresql"`, and re-running
+# `prisma migrate dev` on a machine that isn't blocked from doing so).
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lifeline
+      POSTGRES_PASSWORD: lifeline
+      POSTGRES_DB: lifeline_os
+    ports:
+      - "5432:5432"
+    volumes:
+      - lifeline_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifeline -d lifeline_os"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://lifeline:lifeline@postgres:5432/lifeline_os
+      AUTH_SECRET: change-me-generate-a-real-secret
+      AI_PROVIDER: mock
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+
+volumes:
+  lifeline_postgres_data:
