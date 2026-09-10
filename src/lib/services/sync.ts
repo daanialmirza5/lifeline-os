@@ -95,7 +95,21 @@ async function applyToEntity(
     const targetStatus = input.payload.status as TaskStatus | undefined;
     if (!targetStatus) throw new ValidationError("payload.status is required for UPDATE_STATUS");
 
-    if (input.baseVersion !== undefined && input.baseVersion !== server.version) {
+    // baseVersion is required here, not merely checked when present: it's
+    // the entire conflict-detection mechanism for this operation type.
+    // Falling back to `server.version` when it's missing (the previous
+    // behavior) meant the very value the "conflict?" check compares
+    // against was read from the same live row the check is supposed to
+    // guard — trivially matching itself, silently applying the update no
+    // matter how stale the client's actual view of the task was. Treating
+    // a missing baseVersion as a validation error keeps the comparison
+    // meaningful for every UPDATE_STATUS operation, not just the ones a
+    // well-behaved client happens to include it on.
+    if (input.baseVersion === undefined) {
+      throw new ValidationError("baseVersion is required for UPDATE_STATUS.");
+    }
+
+    if (input.baseVersion !== server.version) {
       return {
         syncStatus: "CONFLICT",
         conflict: { local: { status: targetStatus, baseVersion: input.baseVersion }, server: { status: server.status, version: server.version } },
@@ -103,7 +117,7 @@ async function applyToEntity(
     }
 
     try {
-      await updateTaskStatus(input.entityId, targetStatus, input.baseVersion ?? server.version, actor);
+      await updateTaskStatus(input.entityId, targetStatus, input.baseVersion, actor);
       return { syncStatus: "APPLIED" };
     } catch (err) {
       if (err instanceof ConflictError) {

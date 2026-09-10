@@ -125,4 +125,32 @@ describe("integration: offline sync idempotency and conflict detection", () => {
     const records = await db.syncOperation.findMany({ where: { entityId: task.id } });
     expect(records.map((r) => r.operationId).sort()).toEqual([opA, opB].sort());
   });
+
+  it("rejects an UPDATE_STATUS operation with no baseVersion, rather than silently bypassing conflict detection", async () => {
+    const task = await db.task.create({
+      data: { patientId, journeyId, title: "No baseVersion task", priority: "MEDIUM", status: "OPEN" },
+    });
+
+    // Someone else changes the task first -- if a missing baseVersion were
+    // treated as "no conflict check needed" (the previous behavior), this
+    // would silently overwrite that change.
+    await db.task.update({ where: { id: task.id }, data: { status: "COMPLETED", version: { increment: 1 } } });
+
+    const result = await applySyncOperation(
+      {
+        operationId: crypto.randomUUID(),
+        entityType: "Task",
+        entityId: task.id,
+        operationType: "UPDATE_STATUS",
+        payload: { status: "CANCELLED" },
+        // baseVersion intentionally omitted
+      },
+      coordinator
+    );
+
+    expect(result.syncStatus).toBe("REJECTED");
+
+    const finalTask = await db.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(finalTask.status).toBe("COMPLETED"); // untouched
+  });
 });
