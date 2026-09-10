@@ -37,8 +37,17 @@ jobs:
       - name: Unit + integration tests
         run: npm test
 
+      - name: Set up and seed database for the evaluation harness
+        run: |
+          npm run db:bootstrap
+          npm run db:seed
+        env:
+          DATABASE_URL: file:./dev.db
+
       - name: Evaluation harness
         run: npm run evaluate
+        env:
+          DATABASE_URL: file:./dev.db
 
   build:
     name: Build
