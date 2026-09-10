@@ -4,6 +4,7 @@ import { ConflictError, NotFoundError } from "@/domain/errors";
 import { Session } from "@/lib/auth";
 import { Priority, Role, TaskStatus } from "@/domain/types";
 import { requirePatientAccess } from "@/lib/authorization";
+import { computeAndPersistRisk } from "./risk";
 
 export interface CreateTaskInput {
   patientId: string;
@@ -108,6 +109,15 @@ export async function updateTaskStatus(
       reason: `Fulfilled by task ${taskId}`,
       requestId: newRequestId(),
     });
+
+    // Otherwise the RiskAssessment shown to a clinician stays stale after
+    // an overdue obligation is resolved -- computeAndPersistRisk already
+    // runs at the end of createCareEvent when a *new* obligation appears
+    // (src/lib/services/events.ts), but nothing previously recomputed it
+    // when one gets resolved this way, so a patient could keep showing
+    // HIGH/CRITICAL risk from a factor that no longer applies until
+    // someone happened to visit the risk page and clicked recompute.
+    await computeAndPersistRisk(updated.patientId, updated.journeyId);
   }
 
   return updated;

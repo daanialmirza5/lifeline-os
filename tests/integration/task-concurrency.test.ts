@@ -4,6 +4,7 @@ import { hashPassword, authenticate } from "@/lib/auth";
 import { createPatient } from "@/lib/services/patients";
 import { createJourney } from "@/lib/services/journeys";
 import { updateTaskStatus } from "@/lib/services/tasks";
+import { computeAndPersistRisk } from "@/lib/services/risk";
 import { ConflictError, UnauthorizedError } from "@/domain/errors";
 import type { Session } from "@/lib/auth";
 
@@ -88,6 +89,37 @@ describe("integration: task optimistic concurrency", () => {
     const finalObligation = await db.careObligation.findUniqueOrThrow({ where: { id: obligation.id } });
     expect(finalObligation.status).toBe("COMPLETED");
     expect(finalObligation.completedAt).not.toBeNull();
+  });
+
+  it("recomputes risk when completing a task resolves an overdue critical obligation, instead of leaving it stale", async () => {
+    const event = await db.careEvent.create({
+      data: { patientId, journeyId, type: "CONSULTATION", status: "COMPLETED", title: "Consult 2", occurredAt: new Date() },
+    });
+    const obligation = await db.careObligation.create({
+      data: {
+        patientId,
+        journeyId,
+        sourceEventId: event.id,
+        type: "RISK_TEST_OBLIGATION",
+        description: "Overdue critical obligation for risk staleness test",
+        priority: "CRITICAL",
+        status: "OVERDUE",
+        dueAt: new Date(Date.now() - 86400000),
+      },
+    });
+    const task = await db.task.create({
+      data: { patientId, journeyId, obligationId: obligation.id, title: "Resolve overdue critical", priority: "CRITICAL", status: "OPEN" },
+    });
+
+    const riskBefore = await computeAndPersistRisk(patientId, journeyId);
+    expect(riskBefore.factors.some((f) => f.factor.includes("overdue critical obligation"))).toBe(true);
+
+    await updateTaskStatus(task.id, "COMPLETED", task.version, actor);
+
+    const latestRisk = await db.riskAssessment.findFirstOrThrow({ where: { patientId, journeyId }, orderBy: { computedAt: "desc" } });
+    const factorsAfter: { factor: string }[] = JSON.parse(latestRisk.factors);
+    expect(factorsAfter.some((f) => f.factor.includes("overdue critical obligation"))).toBe(false);
+    expect(latestRisk.riskScore).toBeLessThan(riskBefore.riskScore);
   });
 });
 
