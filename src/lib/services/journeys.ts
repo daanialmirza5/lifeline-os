@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { recordAudit, newRequestId } from "@/lib/audit";
 import { validateJourneyTransition } from "@/domain/workflow";
 import { JourneyState } from "@/domain/types";
-import { NotFoundError } from "@/domain/errors";
+import { ConflictError, NotFoundError } from "@/domain/errors";
 import { Session } from "@/lib/auth";
 import { requirePatientAccess } from "@/lib/authorization";
 
@@ -32,10 +32,27 @@ export async function transitionJourney(
   // or out-of-order transitions — never silently coerced.
   validateJourneyTransition(from, to);
 
-  const updated = await db.careJourney.update({
-    where: { id: journeyId },
+  // Compare-and-swap on the state itself (same pattern as
+  // services/tasks.ts#updateTaskStatus, just using `state` as its own
+  // version marker instead of a separate counter column): without the
+  // `state: from` condition here, two concurrent transitions starting
+  // from the same state could both pass validateJourneyTransition above
+  // against the same stale `from`, and the second write would silently
+  // clobber the first with no error and no trace beyond a misleading
+  // audit log showing two "valid" transitions from a state the journey
+  // was never actually in when the second one applied.
+  const { count } = await db.careJourney.updateMany({
+    where: { id: journeyId, state: from },
     data: { state: to },
   });
+
+  if (count === 0) {
+    throw new ConflictError(
+      `Journey ${journeyId} was transitioned by someone else before this request completed (expected state ${from}). Refresh and retry.`
+    );
+  }
+
+  const updated = await db.careJourney.findUniqueOrThrow({ where: { id: journeyId } });
 
   await recordAudit({
     actorId: actor.userId,
