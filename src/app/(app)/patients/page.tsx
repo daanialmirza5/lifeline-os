@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listPatients } from "@/lib/services/patients";
 import { Card, RiskBadge, StatusBadge, EmptyState } from "@/components/ui/primitives";
+import { getSession } from "@/lib/auth";
 
 export default async function PatientsPage({
   searchParams,
@@ -8,7 +9,9 @@ export default async function PatientsPage({
   searchParams: Promise<{ risk?: string }>;
 }) {
   const { risk } = await searchParams;
-  const patients = await listPatients();
+  const session = await getSession();
+  if (!session) return null;
+  const patients = await listPatients(session);
   const filtered = risk ? patients.filter((p) => p.riskAssessments[0]?.riskLevel === risk) : patients;
 
   return (

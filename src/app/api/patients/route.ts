@@ -8,8 +8,8 @@ import { ForbiddenError } from "@/domain/errors";
 
 export async function GET() {
   try {
-    await requireSession();
-    const patients = await listPatients();
+    const session = await requireSession();
+    const patients = await listPatients(session);
     return apiOk({ patients });
   } catch (err) {
     return apiError(err);
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       throw new ForbiddenError();
     }
     const body = createPatientSchema.parse(await request.json());
-    const patient = await createPatient(body);
+    const patient = await createPatient(body, session);
     const journey = await createJourney(patient.id, "Primary Care Journey");
     return apiOk({ patient, journey }, 201);
   } catch (err) {

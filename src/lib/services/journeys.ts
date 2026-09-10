@@ -4,6 +4,7 @@ import { validateJourneyTransition } from "@/domain/workflow";
 import { JourneyState } from "@/domain/types";
 import { NotFoundError } from "@/domain/errors";
 import { Session } from "@/lib/auth";
+import { requirePatientAccess } from "@/lib/authorization";
 
 export async function createJourney(patientId: string, title: string) {
   return db.careJourney.create({
@@ -24,6 +25,7 @@ export async function transitionJourney(
   reason?: string
 ) {
   const journey = await getJourneyOrThrow(journeyId);
+  await requirePatientAccess(journey.patientId, actor);
   const from = journey.state as JourneyState;
 
   // Throws InvalidTransitionError for terminal-state mutation, duplicate,

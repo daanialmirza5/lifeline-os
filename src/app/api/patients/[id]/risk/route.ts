@@ -1,5 +1,6 @@
 import { apiError, apiOk } from "@/lib/api-helpers";
 import { requireSession } from "@/lib/auth";
+import { requirePatientAccess } from "@/lib/authorization";
 import { db } from "@/lib/db";
 import { getLatestRisk, computeAndPersistRisk } from "@/lib/services/risk";
 import {
@@ -13,8 +14,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id } = await params;
+    await requirePatientAccess(id, session);
     const risk = await getLatestRisk(id);
     return apiOk({ risk: risk ? { ...risk, factors: JSON.parse(risk.factors) } : null });
   } catch (err) {
@@ -35,16 +37,24 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id } = await params;
+    await requirePatientAccess(id, session);
     const journey = await db.careJourney.findFirst({ where: { patientId: id }, orderBy: { createdAt: "desc" } });
     if (!journey) throw new NotFoundError("CareJourney for patient", id);
 
     const result = await computeAndPersistRisk(id, journey.id);
 
     if (result.factors.length > 0) {
-      await generateCoordinationRecommendations(id, journey.id);
-      await generateRiskExplanationRecommendation(id, journey.id, result.riskScore, result.riskLevel, result.factors);
+      await generateCoordinationRecommendations(id, journey.id, session);
+      await generateRiskExplanationRecommendation(
+        id,
+        journey.id,
+        result.riskScore,
+        result.riskLevel,
+        result.factors,
+        session
+      );
     }
 
     return apiOk({ risk: result });

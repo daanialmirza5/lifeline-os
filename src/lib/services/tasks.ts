@@ -3,6 +3,7 @@ import { recordAudit, newRequestId } from "@/lib/audit";
 import { ConflictError, NotFoundError } from "@/domain/errors";
 import { Session } from "@/lib/auth";
 import { Priority, Role, TaskStatus } from "@/domain/types";
+import { requirePatientAccess } from "@/lib/authorization";
 
 export interface CreateTaskInput {
   patientId: string;
@@ -17,6 +18,8 @@ export interface CreateTaskInput {
 }
 
 export async function createTask(input: CreateTaskInput, actor: Session) {
+  await requirePatientAccess(input.patientId, actor);
+
   const task = await db.task.create({
     data: {
       patientId: input.patientId,
@@ -60,6 +63,7 @@ export async function updateTaskStatus(
 ) {
   const existing = await db.task.findUnique({ where: { id: taskId } });
   if (!existing) throw new NotFoundError("Task", taskId);
+  await requirePatientAccess(existing.patientId, actor);
 
   const { count } = await db.task.updateMany({
     where: { id: taskId, version: expectedVersion },
@@ -109,6 +113,15 @@ export async function updateTaskStatus(
   return updated;
 }
 
+/**
+ * NOT patient-scoped: shows every open task regardless of the caller's
+ * care-team memberships. Acting on a specific task (updateTaskStatus,
+ * above) IS enforced — this only affects what appears in the list. Scoping
+ * this list is a reasonable next step (see docs/security.md) but was left
+ * out of this pass to avoid touching the Tasks page's tested behavior for
+ * coordinators who legitimately need cross-patient visibility of the
+ * work queue; tracked as a known limitation rather than silently assumed.
+ */
 export async function listTasks(filter?: { status?: TaskStatus; assignedToId?: string }) {
   return db.task.findMany({
     where: filter,

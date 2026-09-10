@@ -38,6 +38,18 @@ export class ForbiddenError extends DomainError {
   }
 }
 
+/**
+ * Distinct from the generic ForbiddenError (wrong role) — this means the
+ * requester's role is allowed to perform this kind of action in general,
+ * but they are not on *this specific patient's* care team. See
+ * src/lib/authorization.ts.
+ */
+export class PatientAccessDeniedError extends DomainError {
+  constructor(message = "You do not have access to this patient.") {
+    super("PATIENT_ACCESS_DENIED", message, 403);
+  }
+}
+
 export class ValidationError extends DomainError {
   constructor(message: string) {
     super("VALIDATION_ERROR", message, 422);

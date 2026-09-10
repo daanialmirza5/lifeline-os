@@ -466,14 +466,21 @@ async function main() {
   });
 
   for (const s of scenarioJourneys) {
-    await generateCoordinationRecommendations(s.patientId, s.journeyId);
+    await generateCoordinationRecommendations(s.patientId, s.journeyId, SYSTEM_ACTOR);
     const risk = await db.riskAssessment.findFirst({
       where: { patientId: s.patientId, journeyId: s.journeyId },
       orderBy: { computedAt: "desc" },
     });
     if (risk) {
       const factors: RiskFactor[] = JSON.parse(risk.factors);
-      await generateRiskExplanationRecommendation(s.patientId, s.journeyId, risk.riskScore, risk.riskLevel, factors);
+      await generateRiskExplanationRecommendation(
+        s.patientId,
+        s.journeyId,
+        risk.riskScore,
+        risk.riskLevel,
+        factors,
+        SYSTEM_ACTOR
+      );
     }
   }
 

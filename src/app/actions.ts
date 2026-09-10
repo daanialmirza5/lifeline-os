@@ -148,13 +148,13 @@ export async function generateCommunicationDraftAction(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireRole(["CLINICIAN", "COORDINATOR", "ADMIN"]);
+  const session = await requireRole(["CLINICIAN", "COORDINATOR", "ADMIN"]);
   const patientId = formData.get("patientId") as string;
   const patientName = formData.get("patientName") as string;
   const purpose = formData.get("purpose") as string;
   if (!patientId || !purpose) return { error: "Patient and purpose are required." };
 
-  await generateCommunicationDraft(patientId, patientName, purpose);
+  await generateCommunicationDraft(patientId, patientName, purpose, session);
   revalidatePath("/recommendations");
   revalidatePath("/approvals");
   return {};

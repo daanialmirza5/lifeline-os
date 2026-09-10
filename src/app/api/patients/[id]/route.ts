@@ -7,9 +7,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id } = await params;
-    const patient = await getPatientDetail(id);
+    const patient = await getPatientDetail(id, session);
     return apiOk({ patient });
   } catch (err) {
     return apiError(err);

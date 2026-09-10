@@ -4,6 +4,7 @@ import { Session } from "@/lib/auth";
 import { runDocumentExtractionAgent } from "@/ai/agents/document-extraction-agent";
 import { NotFoundError, ValidationError } from "@/domain/errors";
 import { createCareEvent } from "./events";
+import { requirePatientAccess } from "@/lib/authorization";
 
 /**
  * Document -> text extraction -> structured extraction -> validation ->
@@ -15,6 +16,8 @@ export async function uploadDocument(
   input: { patientId: string; journeyId?: string; filename: string; rawText: string },
   actor: Session
 ) {
+  await requirePatientAccess(input.patientId, actor);
+
   const doc = await db.document.create({
     data: {
       patientId: input.patientId,
@@ -57,6 +60,7 @@ export async function validateDocument(
 ) {
   const doc = await db.document.findUnique({ where: { id: documentId } });
   if (!doc) throw new NotFoundError("Document", documentId);
+  await requirePatientAccess(doc.patientId, actor);
   if (doc.status !== "EXTRACTED") {
     throw new ValidationError(`Document ${documentId} is not awaiting validation (status: ${doc.status}).`);
   }
@@ -97,6 +101,7 @@ export async function validateDocument(
 export async function rejectDocument(documentId: string, reason: string, actor: Session) {
   const doc = await db.document.findUnique({ where: { id: documentId } });
   if (!doc) throw new NotFoundError("Document", documentId);
+  await requirePatientAccess(doc.patientId, actor);
 
   const updated = await db.document.update({ where: { id: documentId }, data: { status: "REJECTED" } });
 

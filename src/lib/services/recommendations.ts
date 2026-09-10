@@ -6,6 +6,7 @@ import { runCoordinationAgent } from "@/ai/agents/coordination-agent";
 import { runRiskExplanationAgent } from "@/ai/agents/risk-explanation-agent";
 import { runCommunicationAgent } from "@/ai/agents/communication-agent";
 import { RiskFactor } from "@/domain/risk-engine";
+import { requirePatientAccess } from "@/lib/authorization";
 
 function toObligationView(o: { id: string; description: string; status: string; dueAt: Date }) {
   return { id: o.id, description: o.description, status: o.status, dueAt: o.dueAt.toISOString() };
@@ -17,7 +18,9 @@ function toObligationView(o: { id: string; description: string; status: string; 
  * SUGGESTED recommendation, so calling this repeatedly (e.g. on every
  * dashboard load) doesn't spam duplicate suggestions.
  */
-export async function generateCoordinationRecommendations(patientId: string, journeyId: string) {
+export async function generateCoordinationRecommendations(patientId: string, journeyId: string, actor: Session) {
+  await requirePatientAccess(patientId, actor);
+
   const openObligations = await db.careObligation.findMany({
     where: { patientId, journeyId, status: { in: ["OPEN", "IN_PROGRESS", "OVERDUE"] } },
     orderBy: { dueAt: "asc" },
@@ -72,8 +75,10 @@ export async function generateRiskExplanationRecommendation(
   journeyId: string,
   riskScore: number,
   riskLevel: string,
-  factors: RiskFactor[]
+  factors: RiskFactor[],
+  actor: Session
 ) {
+  await requirePatientAccess(patientId, actor);
   if (factors.length === 0) return null;
 
   const result = await runRiskExplanationAgent({ riskScore, riskLevel, factors });
@@ -97,8 +102,11 @@ export async function generateCommunicationDraft(
   patientId: string,
   patientName: string,
   purpose: string,
+  actor: Session,
   journeyId?: string
 ) {
+  await requirePatientAccess(patientId, actor);
+
   const result = await runCommunicationAgent({ patientName, purpose });
   return db.aIRecommendation.create({
     data: {
@@ -127,6 +135,7 @@ export async function decideRecommendation(
 ) {
   const rec = await db.aIRecommendation.findUnique({ where: { id: recommendationId } });
   if (!rec) throw new NotFoundError("AIRecommendation", recommendationId);
+  await requirePatientAccess(rec.patientId, actor);
   if (rec.status !== "SUGGESTED") {
     throw new ConflictError(
       `Recommendation ${recommendationId} has already been decided (status: ${rec.status}).`

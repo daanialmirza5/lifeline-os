@@ -23,7 +23,7 @@ describe("integration: task optimistic concurrency", () => {
     });
     actor = { userId: user.id, email: user.email, name: user.name, role: "CLINICIAN" };
 
-    const patient = await createPatient({ name: "Concurrency Patient", dob: new Date("2000-01-01") });
+    const patient = await createPatient({ name: "Concurrency Patient", dob: new Date("2000-01-01") }, actor);
     const journey = await createJourney(patient.id, "Concurrency Pathway");
     patientId = patient.id;
     journeyId = journey.id;

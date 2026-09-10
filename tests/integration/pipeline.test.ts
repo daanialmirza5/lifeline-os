@@ -31,7 +31,7 @@ describe("integration: patient -> event -> obligation -> risk -> recommendation 
 
   it("runs the full pipeline and produces a consistent, auditable trail", async () => {
     // 1. Patient created
-    const patient = await createPatient({ name: "Integration Test Patient", dob: new Date("1980-01-01") });
+    const patient = await createPatient({ name: "Integration Test Patient", dob: new Date("1980-01-01") }, clinician);
     const journey = await createJourney(patient.id, "Test Pathway");
     expect(journey.state).toBe("CREATED");
 
@@ -62,7 +62,7 @@ describe("integration: patient -> event -> obligation -> risk -> recommendation 
     expect(risk.factors.length).toBeGreaterThan(0);
 
     // 4. AI recommendation created
-    const recommendations = await generateCoordinationRecommendations(patient.id, journey.id);
+    const recommendations = await generateCoordinationRecommendations(patient.id, journey.id, clinician);
     expect(recommendations.length).toBeGreaterThan(0);
     expect(recommendations[0].status).toBe("SUGGESTED");
 
@@ -89,7 +89,7 @@ describe("integration: patient -> event -> obligation -> risk -> recommendation 
   });
 
   it("rejects deciding the same recommendation twice", async () => {
-    const patient = await createPatient({ name: "Double Decision Patient", dob: new Date("1975-05-05") });
+    const patient = await createPatient({ name: "Double Decision Patient", dob: new Date("1975-05-05") }, clinician);
     const journey = await createJourney(patient.id, "Test Pathway");
     const referral = await createReferral(
       { patientId: patient.id, journeyId: journey.id, specialty: "Neurology" },
@@ -105,7 +105,7 @@ describe("integration: patient -> event -> obligation -> risk -> recommendation 
       data: { createdAt: new Date(Date.now() - 5 * 86400000) },
     });
     await computeAndPersistRisk(patient.id, journey.id);
-    const [rec] = await generateCoordinationRecommendations(patient.id, journey.id);
+    const [rec] = await generateCoordinationRecommendations(patient.id, journey.id, clinician);
 
     await decideRecommendation(rec.id, "APPROVED", clinician);
     await expect(decideRecommendation(rec.id, "APPROVED", clinician)).rejects.toThrow(/already been decided/);

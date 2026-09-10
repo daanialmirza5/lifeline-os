@@ -4,6 +4,7 @@ import { deriveObligationsForEvent } from "@/domain/obligations";
 import { CareEventStatus, CareEventType } from "@/domain/types";
 import { computeAndPersistRisk } from "./risk";
 import { Session } from "@/lib/auth";
+import { requirePatientAccess } from "@/lib/authorization";
 
 export interface CreateCareEventInput {
   patientId: string;
@@ -24,6 +25,8 @@ export interface CreateCareEventInput {
  * AI calls stay bounded and observable rather than firing on every write.
  */
 export async function createCareEvent(input: CreateCareEventInput, actor: Session) {
+  await requirePatientAccess(input.patientId, actor);
+
   const event = await db.careEvent.create({
     data: {
       patientId: input.patientId,

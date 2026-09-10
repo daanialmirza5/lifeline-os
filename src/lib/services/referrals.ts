@@ -3,11 +3,18 @@ import { recordAudit, newRequestId } from "@/lib/audit";
 import { Session } from "@/lib/auth";
 import { createCareEvent } from "./events";
 import { NotFoundError } from "@/domain/errors";
+import { requirePatientAccess } from "@/lib/authorization";
 
 export async function createReferral(
   input: { patientId: string; journeyId: string; specialty: string; notes?: string },
   actor: Session
 ) {
+  // Checked here, before any write, rather than relying solely on the
+  // check inside createCareEvent below -- that one runs after this
+  // function has already inserted the Referral row, which would leave an
+  // orphaned write behind on a denied request.
+  await requirePatientAccess(input.patientId, actor);
+
   const referral = await db.referral.create({
     data: {
       patientId: input.patientId,
@@ -48,6 +55,8 @@ export async function scheduleAppointment(
   },
   actor: Session
 ) {
+  await requirePatientAccess(input.patientId, actor);
+
   const appointment = await db.appointment.create({
     data: {
       patientId: input.patientId,

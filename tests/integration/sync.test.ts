@@ -22,7 +22,7 @@ describe("integration: offline sync idempotency and conflict detection", () => {
     });
     coordinator = { userId: user.id, email: user.email, name: user.name, role: "COORDINATOR" };
 
-    const patient = await createPatient({ name: "Sync Test Patient", dob: new Date("1990-01-01") });
+    const patient = await createPatient({ name: "Sync Test Patient", dob: new Date("1990-01-01") }, coordinator);
     const journey = await createJourney(patient.id, "Sync Test Pathway");
     patientId = patient.id;
     journeyId = journey.id;

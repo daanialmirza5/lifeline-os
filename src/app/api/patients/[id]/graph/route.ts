@@ -1,5 +1,6 @@
 import { apiError, apiOk } from "@/lib/api-helpers";
 import { requireSession } from "@/lib/auth";
+import { requirePatientAccess } from "@/lib/authorization";
 import { db } from "@/lib/db";
 import { getJourneyWithGraph } from "@/lib/services/journeys";
 import { NotFoundError } from "@/domain/errors";
@@ -9,8 +10,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id } = await params;
+    await requirePatientAccess(id, session);
     const journey = await db.careJourney.findFirst({
       where: { patientId: id },
       orderBy: { createdAt: "desc" },
