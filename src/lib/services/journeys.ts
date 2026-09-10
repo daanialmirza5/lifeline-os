@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { recordAudit, newRequestId } from "@/lib/audit";
 import { validateJourneyTransition } from "@/domain/workflow";
-import { JourneyState } from "@/domain/types";
+import { isTerminalJourneyState, JourneyState } from "@/domain/types";
 import { ConflictError, NotFoundError } from "@/domain/errors";
 import { Session } from "@/lib/auth";
 import { requirePatientAccess } from "@/lib/authorization";
@@ -65,6 +65,34 @@ export async function transitionJourney(
     reason: reason ?? null,
     requestId: newRequestId(),
   });
+
+  // A terminal journey (COMPLETED or CANCELLED) with obligations still
+  // OPEN/IN_PROGRESS/OVERDUE is an inconsistent state: those obligations
+  // would otherwise keep counting toward continuity risk and keep
+  // appearing as actionable work for a care pathway that's already
+  // closed. Auto-cancel them rather than leaving them dangling — CANCELLED
+  // (not COMPLETED) because closing the journey doesn't mean the
+  // obligation was actually fulfilled, just that it's moot now.
+  if (isTerminalJourneyState(to)) {
+    const dangling = await db.careObligation.findMany({
+      where: { journeyId, status: { in: ["OPEN", "IN_PROGRESS", "OVERDUE"] } },
+      select: { id: true, status: true },
+    });
+    for (const obligation of dangling) {
+      await db.careObligation.update({ where: { id: obligation.id }, data: { status: "CANCELLED" } });
+      await recordAudit({
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: "CANCEL_OBLIGATION",
+        entityType: "CareObligation",
+        entityId: obligation.id,
+        previousState: obligation.status,
+        newState: "CANCELLED",
+        reason: `Journey ${journeyId} moved to terminal state ${to}`,
+        requestId: newRequestId(),
+      });
+    }
+  }
 
   return updated;
 }
