@@ -43,6 +43,7 @@ model User {
   auditEvents            AuditEvent[]           @relation("AuditActor")
   notifications           Notification[]
   syncOperations          SyncOperation[]
+  careTeamMemberships     CareTeamMembership[]
 }
 
 // ── Core Domain ───────────────────────────────────────────────────────────
@@ -65,6 +66,25 @@ model Patient {
   documents       Document[]
   riskAssessments RiskAssessment[]
   recommendations AIRecommendation[]
+  careTeamMemberships CareTeamMembership[]
+}
+
+// Grants a CLINICIAN/COORDINATOR user access to one patient. Authorization
+// (src/lib/authorization.ts) checks this table for those two roles;
+// PATIENT-role users are scoped via Patient.userId instead, and ADMIN has
+// unrestricted access. See docs/security.md "Patient-scoped authorization".
+model CareTeamMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id])
+  role      String // the member's role at assignment time (informational)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, patientId])
+  @@index([patientId])
+  @@index([userId])
 }
 
 model CareJourney {

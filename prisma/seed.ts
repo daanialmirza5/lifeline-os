@@ -448,6 +448,23 @@ async function main() {
     }
   }
 
+  // ── Care-team assignments ────────────────────────────────────────────
+  // Patient-scoped authorization (src/lib/authorization.ts) requires an
+  // explicit CareTeamMembership row for a CLINICIAN/COORDINATOR to access
+  // a given patient. This small demo clinic has exactly one clinician and
+  // one coordinator, both on every patient's care team — a realistic
+  // structure for a small practice, and it keeps every existing demo
+  // scenario and E2E test reachable. The "denied" side of authorization
+  // (a clinician NOT on a patient's care team) is covered by dedicated
+  // fixtures in tests/integration/authorization.test.ts instead of by
+  // withholding access from any seeded demo patient here.
+  await db.careTeamMembership.createMany({
+    data: allPatients.flatMap((p) => [
+      { userId: clinician.id, patientId: p.id, role: "CLINICIAN" },
+      { userId: coordinator.id, patientId: p.id, role: "COORDINATOR" },
+    ]),
+  });
+
   for (const s of scenarioJourneys) {
     await generateCoordinationRecommendations(s.patientId, s.journeyId);
     const risk = await db.riskAssessment.findFirst({
