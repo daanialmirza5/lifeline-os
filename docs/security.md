@@ -24,19 +24,43 @@
 
 ## Authorization
 
-Role-based, checked server-side on every mutation — never inferred from
-the UI. `src/lib/auth.ts#requireRole` throws `ForbiddenError` (HTTP 403)
-if the session's role isn't in the allowed list; every Route Handler and
-Server Action that mutates state calls it (or `requireSession` for
-read-only routes that only need *a* logged-in user). Examples: creating a
-patient/event/referral/task requires `CLINICIAN`/`COORDINATOR`/`ADMIN`;
-deciding a recommendation requires the same; the observability page
-(`/settings`) requires `ADMIN` specifically, both in the page component and
-independently in `/api/observability`.
+Two independent layers, both enforced server-side, never inferred from
+the UI:
 
-**Known gap**: authorization is role-based, not patient-scoped — a
-`CLINICIAN` can act on any patient, not just ones assigned to them. There
-is no assignment/care-team model in this build.
+1. **Role-based** — `src/lib/auth.ts#requireRole` throws `ForbiddenError`
+   (HTTP 403) if the session's role isn't in the allowed list; every Route
+   Handler and Server Action that mutates state calls it (or
+   `requireSession` for read-only routes that only need *a* logged-in
+   user). Examples: creating a patient/event/referral/task requires
+   `CLINICIAN`/`COORDINATOR`/`ADMIN`; deciding a recommendation requires
+   the same; the observability page (`/settings`) requires `ADMIN`
+   specifically, both in the page component and independently in
+   `/api/observability`.
+2. **Patient-scoped** — `src/lib/authorization.ts#requirePatientAccess`
+   answers the question role checks can't: given a role that's allowed to
+   act in general, is it allowed to act on *this specific patient*.
+   `ADMIN` is unrestricted; `PATIENT` is scoped to the single `Patient` row
+   linked via `Patient.userId`; `CLINICIAN`/`COORDINATOR` are scoped to
+   patients with a matching `CareTeamMembership` row. This is checked
+   inside the service functions themselves (`createCareEvent`,
+   `createReferral`, `scheduleAppointment`, `createTask`,
+   `updateTaskStatus`, `uploadDocument`, `validateDocument`/
+   `rejectDocument`, `transitionJourney`, `decideRecommendation`,
+   `generateCommunicationDraft`, the two recommendation-generation
+   functions) rather than only at each call site, so every current and
+   future caller is covered by construction; list views
+   (`listPatients`) are filtered via `accessiblePatientWhereClause`
+   rather than fetched-then-filtered, so an inaccessible patient is never
+   even read out of the database. See `docs/domain-model.md`
+   "CareTeamMembership" and `docs/threat-model.md` row 6.
+
+**Known gap, still**: the Tasks list and the unscoped (no `patientId`
+query param) Documents list show cross-patient data to any
+`CLINICIAN`/`COORDINATOR` regardless of care-team membership — *acting*
+on a specific task or document IS checked (both resolve the owning
+patient and call `requirePatientAccess`), only list membership isn't
+filtered. Noted inline in `src/lib/services/tasks.ts#listTasks` and
+`src/app/api/documents/route.ts` rather than silently left unscoped.
 
 ## Input validation
 

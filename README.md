@@ -243,7 +243,9 @@ instruction. Full detail in
 
 ## Roadmap
 
-- Patient-scoped authorization (care-team assignment, not just role).
+- Extend patient-scoped authorization's list-view filtering to the Tasks
+  and Documents pages (acting on a specific item is already checked; see
+  `docs/security.md`).
 - A real event bus (the pipeline is currently direct function calls — see
   "Event bus" in `docs/architecture.md` for the exact seam to cut).
 - Wire the three implemented-but-unused-in-UI agents (timeline,
@@ -268,7 +270,10 @@ Stated plainly, not buried:
   Google providers are real, working implementations but have not been
   called against a live API in this build.
 - **Document ingestion is text-paste only** — no PDF/binary file parsing.
-- **Authorization is role-based, not patient-scoped.**
+- **Patient-scoped authorization covers every per-patient read/write path**
+  (see `docs/security.md`), but the Tasks and Documents *list* views still
+  show cross-patient metadata to any clinician/coordinator regardless of
+  care-team membership — acting on a specific item is checked either way.
 - **The in-memory rate limiter and AI-call log** don't persist across
   restarts or coordinate across multiple server instances.
 - **Docker/docker-compose has not been run** in this environment (the

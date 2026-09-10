@@ -39,7 +39,21 @@ erDiagram
     Patient ||--o{ Document : uploads
     User ||--o{ AuditEvent : "acts as"
     User ||--o{ SyncOperation : queues
+    User ||--o{ CareTeamMembership : "grants access via"
+    Patient ||--o{ CareTeamMembership : "accessible to"
 ```
+
+### CareTeamMembership — patient-scoped authorization
+
+Grants one `CLINICIAN`/`COORDINATOR` user access to one patient
+(`userId` + `patientId`, unique together). `src/lib/authorization.ts#requirePatientAccess`
+checks this table for those two roles; `PATIENT`-role access is instead
+scoped via `Patient.userId`, and `ADMIN` is unrestricted. `createPatient`
+auto-creates the membership for its `CLINICIAN`/`COORDINATOR` creator, so
+the person who just created a patient doesn't immediately fail their own
+next request to view it. See `docs/security.md` "Authorization" for the
+full enforcement picture (every patient-scoped service function checks
+this itself, not just the routes that call it).
 
 ### CareJourney — the state machine
 
@@ -50,7 +64,16 @@ in `src/domain/types.ts` (`JOURNEY_TRANSITIONS`), validated by
 `src/domain/workflow.ts#validateJourneyTransition`, which is what
 `tests/unit/workflow.test.ts` exercises directly (valid transition,
 terminal-state mutation, duplicate transition, out-of-order transition —
-the four cases the spec calls out).
+the four cases the spec calls out). The update itself is a compare-and-swap
+(`updateMany({ where: { id, state: from } })`, not a plain `update`) so two
+concurrent transitions starting from the same state can't silently
+clobber one another — see `tests/integration/journey-concurrency.test.ts`.
+Landing on a terminal state also auto-cancels any obligation on that
+journey still `OPEN`/`IN_PROGRESS`/`OVERDUE` (`CANCELLED`, not
+`COMPLETED` — closing the journey doesn't mean the obligation was
+fulfilled, just that it's moot now), so a closed pathway doesn't keep
+contributing overdue-obligation weight to its own risk score; see
+`tests/integration/journey-terminal-state.test.ts`.
 
 ### CareEvent — a fact
 

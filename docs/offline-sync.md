@@ -69,6 +69,16 @@ client last knew about. On apply:
   (`services/tasks.ts#updateTaskStatus`), which is itself
   optimistic-concurrency-checked (`WHERE id = ? AND version = ?`).
 
+`baseVersion` is **required** for an `UPDATE_STATUS` operation, not merely
+checked when present — `applyToEntity` (`src/lib/services/sync.ts`)
+rejects one that omits it with a `ValidationError` (surfaces as a
+`REJECTED` sync result) rather than falling back to comparing the
+server's version against itself, which would trivially "match" and
+silently skip conflict detection entirely. This was a real bug, fixed
+during a later hardening pass — the real client always includes it, so it
+was never reachable through the UI, but nothing stopped a direct API
+request from omitting it before the fix.
+
 This is the same mechanism online and offline: a same-tab double-click
 race is caught by the identical version check that catches an offline
 queue clashing with an online edit. `tests/integration/sync.test.ts`
