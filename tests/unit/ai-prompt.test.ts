@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import { buildStructuredPrompt, parseStructuredPrompt, safeParseJson } from "@/ai/prompt";
+import {
+  riskExplanationAgentOutputSchema,
+  coordinationAgentOutputSchema,
+  communicationAgentOutputSchema,
+} from "@/ai/schemas";
 
 const schema = z.object({ summary: z.string(), count: z.number() });
 
@@ -45,5 +50,45 @@ describe("ai/prompt: safeParseJson (LLM output validation)", () => {
   it("never lets extra prose around the JSON break parsing", () => {
     const withProse = 'Sure, here is the result:\n{"summary": "ok", "count": 2}\nHope this helps!';
     expect(safeParseJson(withProse, schema)).toEqual({ summary: "ok", count: 2 });
+  });
+});
+
+describe("ai/schemas: required narrative fields reject blank text", () => {
+  // A response that's syntactically valid JSON matching the shape, but
+  // with nothing actually in its required text fields, must NOT pass —
+  // otherwise a flaky or truncated real-provider response could reach a
+  // clinician's approval queue as a blank recommendation with nothing to
+  // review. Each of these would have passed under a bare z.string().
+  it("rejects an empty explanation/recommendedAction from the risk-explanation agent", () => {
+    const blank = safeParseJson('{"explanation": "", "recommendedAction": "Do something"}', riskExplanationAgentOutputSchema);
+    expect(blank).toBeNull();
+
+    const whitespaceOnly = safeParseJson(
+      '{"explanation": "Real text", "recommendedAction": "   "}',
+      riskExplanationAgentOutputSchema
+    );
+    expect(whitespaceOnly).toBeNull();
+
+    const valid = safeParseJson(
+      '{"explanation": "Real text", "recommendedAction": "Do something"}',
+      riskExplanationAgentOutputSchema
+    );
+    expect(valid).toEqual({ explanation: "Real text", recommendedAction: "Do something" });
+  });
+
+  it("rejects a coordination action with a blank action or rationale", () => {
+    const blank = safeParseJson(
+      '{"actions": [{"action": "", "rationale": "Because", "priority": "HIGH"}]}',
+      coordinationAgentOutputSchema
+    );
+    expect(blank).toBeNull();
+  });
+
+  it("rejects a communication draft with a blank subject or body", () => {
+    const blank = safeParseJson(
+      '{"subject": "", "body": "Hello", "channel": "EMAIL"}',
+      communicationAgentOutputSchema
+    );
+    expect(blank).toBeNull();
   });
 });
