@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { NotFoundError } from "@/domain/errors";
 import { Session } from "@/lib/auth";
 import { accessiblePatientWhereClause, requirePatientAccess } from "@/lib/authorization";
+import { recordAudit, newRequestId } from "@/lib/audit";
 
 export async function listPatients(session: Session) {
   return db.patient.findMany({
@@ -60,6 +61,20 @@ export async function createPatient(input: { name: string; dob: Date; mrn?: stri
       data: { userId: actor.userId, patientId: patient.id, role: actor.role },
     });
   }
+
+  await recordAudit({
+    actorId: actor.userId,
+    actorRole: actor.role,
+    action: "CREATE_PATIENT",
+    entityType: "Patient",
+    entityId: patient.id,
+    newState: "CREATED",
+    reason:
+      actor.role === "CLINICIAN" || actor.role === "COORDINATOR"
+        ? `Care team membership auto-assigned to creator (${actor.role})`
+        : null,
+    requestId: newRequestId(),
+  });
 
   return patient;
 }
