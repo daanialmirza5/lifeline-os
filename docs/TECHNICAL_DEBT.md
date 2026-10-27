@@ -1,7 +1,6 @@
 # Lifeline OS — Technical Debt & Architectural Audit
 
 **Repository**: `lifeline-os`  
-**Status**: Tier 1 Flagship (Vitest + Playwright suites)
 
 ## Prioritized Debt Items
 - **[P1 — High] End-to-End Encryption for Offline Storage**: IndexedDB storage on client devices is currently unencrypted. Implement Web Crypto API AES-GCM database encryption for offline records.
